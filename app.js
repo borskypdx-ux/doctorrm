@@ -68,13 +68,22 @@ async function tryUnlock(password, silent) {
 /* ================= ODVOZENÉ HODNOTY ================= */
 function recEdit(r) { return EDITS[r.id] || {}; }
 function recPromoce(r) { const e = recEdit(r); return e.promoce ?? r.promoce ?? null; }
-function recVek(r) {
+// zdroj věku podle priority: ruční > ARES (skutečný rok narození) > odhad z promoce
+function recNarozeni(r) {
   const e = recEdit(r);
-  if (e.vek != null) return e.vek;
-  const p = recPromoce(r);
-  return p ? nowYear - (p - DATA.meta.promoceAge) : null;   // promoce ~ ve 24 letech
+  if (e.vek != null) return nowYear - e.vek;
+  if (e.promoce != null) return e.promoce - DATA.meta.promoceAge;
+  if (r.birth != null) return r.birth;                 // ARES — skutečný rok narození
+  const p = r.promoce; return p ? p - DATA.meta.promoceAge : null;
 }
-function recNarozeni(r) { const p = recPromoce(r); const e = recEdit(r); if (e.vek != null) return nowYear - e.vek; return p ? p - DATA.meta.promoceAge : null; }
+function recVek(r) { const n = recNarozeni(r); return n != null ? nowYear - n : null; }
+function vekSrc(r) {
+  const e = recEdit(r);
+  if (e.vek != null || e.promoce != null) return "ručně";
+  if (r.birth != null) return "ARES (rok narození)";
+  if (r.promoce != null) return "odhad z promoce ČLK";
+  return null;
+}
 function kmenPercentile(k) {
   if (k == null || !GP_KMEN_SORTED.length) return 0;
   let lo = 0, hi = GP_KMEN_SORTED.length;
@@ -133,7 +142,7 @@ const COLUMNS = [
   { key: "doctor",  label: "Lékař / odb. zástupce", on: 1, get: (r) => r.doctor || r.oz || "" },
   { key: "vek",     label: "Věk",         on: 1, get: (r) => recVek(r),
     fmt: (v) => v == null ? '<span class="muted">?</span>' : `<span class="${v >= 63 ? "age-red" : v >= 55 ? "age-orange" : ""}">${v}</span>` },
-  { key: "narozeni",label: "Nar. (odhad)",on: 0, get: (r) => recNarozeni(r) },
+  { key: "narozeni",label: "Rok narození",on: 0, get: (r) => recNarozeni(r) },
   { key: "promoce", label: "Promoce",     on: 1, get: (r) => recPromoce(r) },
   { key: "kmen",    label: "Potenc. kmen",on: 1, get: (r) => r.kmen, fmt: (v) => v == null ? "" : v.toLocaleString("cs") },
   { key: "stav",    label: "Stav",        on: 1, get: (r) => recEdit(r).stav || "" },
@@ -309,7 +318,7 @@ window.openDetail = function (id) {
   $("#dTitle").textContent = r.nazev;
   const rows = [
     ["Lékař / zástupce", r.doctor || r.oz || "—"],
-    ["Věk", v != null ? `${v} let (nar. ~${recNarozeni(r)})` : "neznámý"],
+    ["Věk", v != null ? `${v} let (nar. ${recNarozeni(r)}) · zdroj: ${vekSrc(r)}` : "neznámý"],
     ["Promoce", recPromoce(r) ? recPromoce(r) + (r.promoceSrc === "lkcr" ? " (ČLK)" : e.promoce ? " (ručně)" : "") : "—"],
     ["Obory", r.obory.join(", ")],
     ["Druh zařízení", r.druh],
@@ -483,8 +492,8 @@ function initApp() {
   $("#sourceInfo").innerHTML = [
     `Registr zařízení: ${esc(DATA.meta.sourceNrpzs)}`,
     `Populace: ${esc(DATA.meta.sourcePop)}`,
-    `Roky promoce (ČLK): načteno ${DATA.meta.lkcrDone}, ve frontě ${DATA.meta.lkcrQueued} — plní workflow „Data refresh"`,
-    `Předpoklad: promoce ve věku ${DATA.meta.promoceAge} let → věk = ${nowYear} − (rok promoce − ${DATA.meta.promoceAge})`,
+    `Věk lékaře: skutečný rok narození z ARES (veřejný rejstřík) u ${DATA.meta.aresHits ?? 0} ordinací s.r.o.; jinak odhad z roku promoce ČLK (věk = ${nowYear} − (rok promoce − ${DATA.meta.promoceAge})); ručně lze kdykoli přepsat`,
+    `Roky promoce ČLK: seznam je chráněný reCAPTCHA — doplňuje se ručně (detail lékaře / import)`,
     `Sestaveno: ${DATA.meta.builtAt}`,
   ].map((x) => `<li>${x}</li>`).join("");
   $("#exportEdits").onclick = () => download("doctorrm-upravy.json", JSON.stringify(EDITS, null, 1));
