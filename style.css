@@ -1,0 +1,96 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1c2733; background: #f4f6f8; }
+.hidden { display: none !important; }
+.muted { color: #68727d; }
+.small { font-size: 12px; }
+code { background: #e9edf1; padding: 1px 5px; border-radius: 4px; }
+
+/* ---- login ---- */
+.login-overlay { position: fixed; inset: 0; background: linear-gradient(160deg, #0d2137, #14486e); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.login-box { background: #fff; padding: 36px 44px; border-radius: 14px; width: 340px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+.login-box h1 { margin: 0 0 4px; }
+.login-box input[type=password] { width: 100%; padding: 10px 12px; margin: 18px 0 8px; border: 1px solid #c6ced6; border-radius: 8px; font-size: 16px; }
+.login-box .remember { display: block; font-size: 12px; color: #68727d; text-align: left; margin-bottom: 12px; }
+.login-box button { width: 100%; padding: 10px; background: #14486e; color: #fff; border: 0; border-radius: 8px; font-size: 15px; cursor: pointer; }
+.login-box button:hover { background: #0d2137; }
+.pw-err { color: #c0392b; font-size: 13px; margin-top: 10px; min-height: 18px; }
+
+/* ---- layout ---- */
+header { display: flex; align-items: center; gap: 18px; padding: 8px 14px; background: #0d2137; color: #fff; position: sticky; top: 0; z-index: 500; flex-wrap: wrap; }
+header .brand { font-size: 16px; }
+header nav { display: flex; gap: 4px; }
+.tab { background: transparent; color: #cfd8e0; border: 0; padding: 7px 13px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.tab.active, .tab:hover { background: #14486e; color: #fff; }
+.header-right { margin-left: auto; }
+.count-pill { background: #2a9d8f; padding: 4px 12px; border-radius: 999px; font-size: 13px; }
+
+#filters { display: flex; gap: 8px; align-items: center; padding: 8px 14px; background: #fff; border-bottom: 1px solid #dde3e9; flex-wrap: wrap; position: sticky; top: 46px; z-index: 400; }
+#filters input[type=search] { flex: 1 1 210px; min-width: 170px; }
+#filters input, #filters select { padding: 7px 9px; border: 1px solid #c6ced6; border-radius: 8px; font-size: 13px; background: #fff; }
+#filters .num { width: 58px; }
+.fgroup.age { display: flex; align-items: center; gap: 5px; font-size: 13px; color: #68727d; }
+.chip { padding: 6px 11px; border: 1px solid #c6ced6; background: #fff; border-radius: 999px; cursor: pointer; font-size: 13px; }
+.chip:hover { background: #eef2f5; }
+.chip.on { background: #14486e; color: #fff; border-color: #14486e; }
+.chip.danger { color: #c0392b; border-color: #e5b1aa; }
+
+/* ---- dropdown ---- */
+.dropdown { position: relative; }
+.drop-btn { padding: 7px 11px; border: 1px solid #c6ced6; background: #fff; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.drop-panel { position: absolute; top: calc(100% + 4px); left: 0; background: #fff; border: 1px solid #c6ced6; border-radius: 10px; box-shadow: 0 10px 34px rgba(0,0,0,.18); padding: 10px; z-index: 600; width: 320px; max-height: 420px; overflow: auto; }
+.drop-panel label { display: block; padding: 3px 4px; font-size: 13px; cursor: pointer; border-radius: 5px; }
+.drop-panel label:hover { background: #eef2f5; }
+.drop-panel input[type=search] { width: 100%; padding: 6px 8px; margin-bottom: 6px; border: 1px solid #c6ced6; border-radius: 6px; }
+.drop-actions { font-size: 12px; margin-bottom: 6px; }
+
+/* ---- table ---- */
+.tabpane { padding: 0; }
+.table-toolbar { display: flex; gap: 10px; align-items: center; padding: 8px 14px; }
+#tableWrap { overflow: auto; height: calc(100vh - 158px); background: #fff; position: relative; }
+table { border-collapse: collapse; width: max-content; min-width: 100%; }
+thead th { position: sticky; top: 0; background: #eef2f5; z-index: 5; text-align: left; padding: 8px 10px; font-size: 12px; white-space: nowrap; cursor: pointer; user-select: none; border-bottom: 2px solid #dde3e9; }
+thead th:hover { background: #e2e9ef; }
+tbody td { padding: 6px 10px; border-bottom: 1px solid #f0f3f6; font-size: 13px; white-space: nowrap; max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: #f2f7fb; }
+.age-red { color: #c0392b; font-weight: 700; }
+.age-orange { color: #b06d10; font-weight: 600; }
+.score-badge { display: inline-block; min-width: 34px; text-align: center; padding: 1px 7px; border-radius: 999px; color: #fff; font-weight: 600; font-size: 12px; }
+
+/* ---- mapa ---- */
+#map { height: calc(100vh - 150px); }
+#mapToolbar { display: flex; gap: 16px; padding: 7px 14px; background: #fff; font-size: 13px; align-items: center; flex-wrap: wrap; }
+#mapToolbar .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 3px; vertical-align: -1px; }
+
+/* ---- scoring ---- */
+#tab-score { padding: 14px 20px; max-width: 1100px; margin: 0 auto; overflow: auto; height: calc(100vh - 110px); }
+.score-config { background: #fff; padding: 14px 18px; border-radius: 12px; border: 1px solid #dde3e9; }
+.sliders label { display: block; margin: 10px 0; font-size: 13px; }
+.sliders input[type=range] { width: 100%; }
+.score-row { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #dde3e9; border-radius: 10px; padding: 9px 14px; margin: 6px 0; cursor: pointer; }
+.score-row:hover { border-color: #14486e; }
+.score-row .rank { font-size: 17px; font-weight: 800; color: #8a949e; width: 34px; }
+.score-row .who { flex: 1; min-width: 0; }
+.score-row .who .nm { font-weight: 600; }
+.score-bars { display: flex; gap: 3px; width: 220px; height: 14px; }
+.score-bars i { display: block; height: 100%; border-radius: 3px; }
+.sb-age { background: #d33; } .sb-kmen { background: #2a9d8f; } .sb-lf { background: #1d6fd6; } .sb-vp { background: #7b2cbf; }
+.area-row { display: flex; gap: 12px; background: #fff; border: 1px solid #dde3e9; border-radius: 10px; padding: 8px 14px; margin: 5px 0; align-items: center; }
+
+/* ---- nastavení ---- */
+.settings { padding: 16px 22px; max-width: 760px; }
+.settings h3 { margin-top: 22px; }
+.settings .chip { margin-right: 8px; }
+
+/* ---- drawer ---- */
+.drawer { position: fixed; top: 0; right: 0; width: 460px; max-width: 96vw; height: 100vh; background: #fff; box-shadow: -12px 0 40px rgba(0,0,0,.22); z-index: 800; display: flex; flex-direction: column; }
+.drawer-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #0d2137; color: #fff; }
+.drawer-head button { background: none; border: 0; color: #fff; font-size: 17px; cursor: pointer; }
+#dBody { padding: 14px 18px; overflow: auto; }
+#dBody dl { display: grid; grid-template-columns: 130px 1fr; gap: 4px 10px; font-size: 13px; margin: 0 0 14px; }
+#dBody dt { color: #68727d; }
+#dBody dd { margin: 0; word-break: break-word; }
+#dBody textarea { width: 100%; min-height: 70px; border: 1px solid #c6ced6; border-radius: 8px; padding: 8px; font: inherit; }
+#dBody .editrow { display: flex; gap: 6px; margin: 6px 0; }
+#dBody .editrow input, #dBody .editrow select { padding: 6px 8px; border: 1px solid #c6ced6; border-radius: 6px; font-size: 13px; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; background: #eef2f5; margin-right: 4px; }

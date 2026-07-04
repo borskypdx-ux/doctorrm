@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>DoctorRM — Váš Praktik</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="vendor/markercluster/MarkerCluster.css">
+<link rel="stylesheet" href="vendor/markercluster/MarkerCluster.Default.css">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🩺</text></svg>">
+</head>
+<body>
+
+<!-- ======= LOGIN ======= -->
+<div id="login" class="login-overlay">
+  <div class="login-box">
+    <h1>🩺 DoctorRM</h1>
+    <p class="muted">Databáze lékařů ČR · Váš Praktik</p>
+    <input type="password" id="pw" placeholder="Heslo" autofocus>
+    <label class="remember"><input type="checkbox" id="pwRemember"> zapamatovat na tomto zařízení</label>
+    <button id="pwBtn">Odemknout</button>
+    <div id="pwErr" class="pw-err"></div>
+    <div id="pwProgress" class="muted small"></div>
+  </div>
+</div>
+
+<!-- ======= APP ======= -->
+<div id="app" class="hidden">
+  <header>
+    <div class="brand">🩺 <b>DoctorRM</b> <span class="muted small" id="metaInfo"></span></div>
+    <nav>
+      <button data-tab="table" class="tab active">📋 Tabulka</button>
+      <button data-tab="map" class="tab">🗺️ Mapa</button>
+      <button data-tab="score" class="tab">🎯 Příležitosti</button>
+      <button data-tab="settings" class="tab">⚙️ Nastavení</button>
+    </nav>
+    <div class="header-right"><span id="countInfo" class="count-pill"></span></div>
+  </header>
+
+  <!-- filtry -->
+  <div id="filters">
+    <input type="search" id="fText" placeholder="🔍 hledat (jméno, lékař, obec, IČO…)">
+    <div class="fgroup dropdown" id="oborDrop">
+      <button class="drop-btn" id="oborBtn">Specializace <b id="oborCount"></b> ▾</button>
+      <div class="drop-panel hidden" id="oborPanel">
+        <input type="search" id="oborSearch" placeholder="hledat obor…">
+        <div class="drop-actions"><a href="#" id="oborAll">vše</a> · <a href="#" id="oborNone">nic</a> · <a href="#" id="oborVpl">jen praktici</a></div>
+        <div id="oborList"></div>
+      </div>
+    </div>
+    <select id="fKraj"><option value="">— kraj —</option></select>
+    <select id="fOkres"><option value="">— okres —</option></select>
+    <input type="text" id="fObec" list="obecList" placeholder="město / obec">
+    <datalist id="obecList"></datalist>
+    <div class="fgroup age">
+      věk <input type="number" id="fVekMin" min="25" max="100" placeholder="od" class="num">–<input type="number" id="fVekMax" min="25" max="100" placeholder="do" class="num">
+      <label title="Zahrnout i lékaře, u kterých zatím neznáme věk"><input type="checkbox" id="fVekUnknown" checked>i neznámý</label>
+      <button id="f63" class="chip" title="věk 63+">63+</button>
+    </div>
+    <button id="fReset" class="chip">✕ reset</button>
+  </div>
+
+  <!-- ============ TAB: TABULKA ============ -->
+  <section id="tab-table" class="tabpane">
+    <div class="table-toolbar">
+      <div class="dropdown" id="colsDrop">
+        <button class="drop-btn">Sloupce ▾</button>
+        <div class="drop-panel hidden" id="colsPanel"></div>
+      </div>
+      <button id="exportCsv" class="chip">⬇ export CSV</button>
+      <span class="muted small">klik na řádek = detail · klik na hlavičku = řazení</span>
+    </div>
+    <div id="tableWrap">
+      <table id="grid"><thead></thead><tbody></tbody></table>
+      <div id="gridSpacer"></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: MAPA ============ -->
+  <section id="tab-map" class="tabpane hidden">
+    <div id="mapToolbar">
+      <label><input type="checkbox" id="layerDoctors" checked> lékaři</label>
+      <label><input type="checkbox" id="layerObce"> pokrytí obcí (potenciální kmen)</label>
+      <label><input type="checkbox" id="layerVp" checked> Váš Praktik</label>
+      <label><input type="checkbox" id="layerLf" checked> lékařské fakulty</label>
+      <span class="legend">
+        <i style="background:#d33"></i>63+ &nbsp;<i style="background:#e8a33d"></i>55–62 &nbsp;
+        <i style="background:#2a9d8f"></i>&lt;55 &nbsp;<i style="background:#999"></i>věk neznámý &nbsp;
+        <i style="background:#7b2cbf"></i>Váš Praktik &nbsp;<i style="background:#1d6fd6"></i>LF
+      </span>
+    </div>
+    <div id="map"></div>
+  </section>
+
+  <!-- ============ TAB: SCORING ============ -->
+  <section id="tab-score" class="tabpane hidden">
+    <div class="score-config">
+      <h3>Váhy scoringu <span class="muted small">(automaticky se přepočítává)</span></h3>
+      <div class="sliders">
+        <label>Věk lékaře + shluk starších (63+) v okolí <b id="wAgeV">50 %</b><input type="range" id="wAge" min="0" max="100" value="50"></label>
+        <label>Potenciální kmen pacientů <b id="wKmenV">30 %</b><input type="range" id="wKmen" min="0" max="100" value="30"></label>
+        <label>Blízkost lékařské fakulty <b id="wLfV">10 %</b><input type="range" id="wLf" min="0" max="100" value="10"></label>
+        <label>Blízkost našich ordinací <b id="wVpV">10 %</b><input type="range" id="wVp" min="0" max="100" value="10"></label>
+      </div>
+      <p class="muted small">Věk: plný počet bodů od 63 let, náběh od 50 let; každý další lékař 63+ do 3 km = bonus.
+      Kmen: percentil potenciálního spádu (gravitační model 1/d²). LF: e^(−d/40 km). Naše ordinace: e^(−d/30 km).
+      U lékařů bez známého věku se věková složka počítá neutrálně (0,35).</p>
+    </div>
+    <h3>🏆 Top příležitosti k akvizici <span class="muted small" id="scoreScope"></span></h3>
+    <div id="scoreList"></div>
+    <h3>🗺️ Nejpodhodnocenější oblasti (nejvíc pacientů na praktika v okolí)</h3>
+    <div id="areaList"></div>
+  </section>
+
+  <!-- ============ TAB: NASTAVENÍ ============ -->
+  <section id="tab-settings" class="tabpane hidden">
+    <div class="settings">
+      <h3>Data</h3>
+      <ul id="sourceInfo" class="muted"></ul>
+      <h3>Moje úpravy (poznámky, stavy, věky…)</h3>
+      <p class="muted small">Úpravy se ukládají do prohlížeče (localStorage). Pro přenos/zálohu použij export.</p>
+      <button id="exportEdits" class="chip">⬇ export úprav (JSON)</button>
+      <input type="file" id="importEdits" accept=".json" class="hidden">
+      <button id="importEditsBtn" class="chip">⬆ import úprav</button>
+      <button id="resetEdits" class="chip danger">🗑 smazat všechny lokální úpravy</button>
+      <h3>Heslo</h3>
+      <p class="muted small">Heslo se mění přegenerováním dat: v repozitáři nastav GitHub secret <code>CRM_PASSWORD</code>
+      (Settings → Secrets → Actions) a spusť workflow „Deploy". Do té doby platí výchozí heslo.</p>
+      <h3>Odhlásit</h3>
+      <button id="logout" class="chip">🚪 odhlásit</button>
+    </div>
+  </section>
+</div>
+
+<!-- ======= DETAIL DRAWER ======= -->
+<div id="drawer" class="drawer hidden">
+  <div class="drawer-head">
+    <b id="dTitle"></b>
+    <button id="dClose">✕</button>
+  </div>
+  <div id="dBody"></div>
+</div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/markercluster/leaflet.markercluster.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
