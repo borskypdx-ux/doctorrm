@@ -48,7 +48,8 @@ async function tryUnlock(password, silent) {
   prog.textContent = "Stahuji data…";
   try {
     if (!window.__encBuf) {
-      const resp = await fetch("data/data.enc", { cache: "no-cache" });
+      // cache-buster (?t=…) zajistí, že se po aktualizaci vždy stáhnou čerstvá data
+      const resp = await fetch("data/data.enc?t=" + Date.now(), { cache: "no-store" });
       if (!resp.ok) throw new Error("Nelze stáhnout data (" + resp.status + ")");
       window.__encBuf = await resp.arrayBuffer();
     }
