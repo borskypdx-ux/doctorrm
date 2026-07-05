@@ -6,23 +6,23 @@ html, body { margin: 0; padding: 0; height: 100%; font: 14px/1.45 system-ui, -ap
 code { background: #e9edf1; padding: 1px 5px; border-radius: 4px; }
 
 /* ---- login ---- */
-.login-overlay { position: fixed; inset: 0; background: linear-gradient(160deg, #0d2137, #14486e); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.login-overlay { position: fixed; inset: 0; background: linear-gradient(160deg, #f4f4f4, #dedddd); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .login-box { background: #fff; padding: 36px 44px; border-radius: 14px; width: 340px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
 .login-box h1 { margin: 0 0 4px; }
 .login-box input[type=password] { width: 100%; padding: 10px 12px; margin: 18px 0 8px; border: 1px solid #c6ced6; border-radius: 8px; font-size: 16px; }
 .login-box .remember { display: block; font-size: 12px; color: #68727d; text-align: left; margin-bottom: 12px; }
-.login-box button { width: 100%; padding: 10px; background: #14486e; color: #fff; border: 0; border-radius: 8px; font-size: 15px; cursor: pointer; }
-.login-box button:hover { background: #0d2137; }
+.login-box button { width: 100%; padding: 10px; background: #d2403b; color: #fff; border: 0; border-radius: 8px; font-size: 15px; cursor: pointer; }
+.login-box button:hover { background: #a93430; }
 .pw-err { color: #c0392b; font-size: 13px; margin-top: 10px; min-height: 18px; }
 
 /* ---- layout ---- */
-header { display: flex; align-items: center; gap: 18px; padding: 8px 14px; background: #0d2137; color: #fff; position: sticky; top: 0; z-index: 500; flex-wrap: wrap; }
+header { display: flex; align-items: center; gap: 18px; padding: 6px 14px; background: #fff; color: #3a3a3a; border-bottom: 3px solid #d2403b; position: sticky; top: 0; z-index: 500; flex-wrap: wrap; }
 header .brand { font-size: 16px; }
 header nav { display: flex; gap: 4px; }
-.tab { background: transparent; color: #cfd8e0; border: 0; padding: 7px 13px; border-radius: 8px; cursor: pointer; font-size: 14px; }
-.tab.active, .tab:hover { background: #14486e; color: #fff; }
+.tab { background: transparent; color: #6b6b6b; border: 0; padding: 7px 13px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.tab.active, .tab:hover { background: #d2403b; color: #fff; }
 .header-right { margin-left: auto; }
-.count-pill { background: #2a9d8f; padding: 4px 12px; border-radius: 999px; font-size: 13px; }
+.count-pill { background: #d2403b; padding: 4px 12px; border-radius: 999px; font-size: 13px; }
 
 #filters { display: flex; gap: 8px; align-items: center; padding: 8px 14px; background: #fff; border-bottom: 1px solid #dde3e9; flex-wrap: wrap; position: sticky; top: 46px; z-index: 400; }
 #filters input[type=search] { flex: 1 1 210px; min-width: 170px; }
@@ -31,7 +31,7 @@ header nav { display: flex; gap: 4px; }
 .fgroup.age { display: flex; align-items: center; gap: 5px; font-size: 13px; color: #68727d; }
 .chip { padding: 6px 11px; border: 1px solid #c6ced6; background: #fff; border-radius: 999px; cursor: pointer; font-size: 13px; }
 .chip:hover { background: #eef2f5; }
-.chip.on { background: #14486e; color: #fff; border-color: #14486e; }
+.chip.on { background: #d2403b; color: #fff; border-color: #d2403b; }
 .chip.danger { color: #c0392b; border-color: #e5b1aa; }
 
 /* ---- dropdown ---- */
@@ -49,10 +49,10 @@ header nav { display: flex; gap: 4px; }
 #tableWrap { overflow: auto; height: calc(100vh - 158px); background: #fff; position: relative; }
 table { border-collapse: collapse; width: max-content; min-width: 100%; }
 thead th { position: sticky; top: 0; background: #eef2f5; z-index: 5; text-align: left; padding: 8px 10px; font-size: 12px; white-space: nowrap; cursor: pointer; user-select: none; border-bottom: 2px solid #dde3e9; }
-thead th:hover { background: #e2e9ef; }
+thead th:hover { background: #f3e2e1; }
 tbody td { padding: 6px 10px; border-bottom: 1px solid #f0f3f6; font-size: 13px; white-space: nowrap; max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
 tbody tr { cursor: pointer; }
-tbody tr:hover { background: #f2f7fb; }
+tbody tr:hover { background: #faf1f0; }
 .age-red { color: #c0392b; font-weight: 700; }
 .age-orange { color: #b06d10; font-weight: 600; }
 .score-badge { display: inline-block; min-width: 34px; text-align: center; padding: 1px 7px; border-radius: 999px; color: #fff; font-weight: 600; font-size: 12px; }
@@ -68,7 +68,7 @@ tbody tr:hover { background: #f2f7fb; }
 .sliders label { display: block; margin: 10px 0; font-size: 13px; }
 .sliders input[type=range] { width: 100%; }
 .score-row { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #dde3e9; border-radius: 10px; padding: 9px 14px; margin: 6px 0; cursor: pointer; }
-.score-row:hover { border-color: #14486e; }
+.score-row:hover { border-color: #d2403b; }
 .score-row .rank { font-size: 17px; font-weight: 800; color: #8a949e; width: 34px; }
 .score-row .who { flex: 1; min-width: 0; }
 .score-row .who .nm { font-weight: 600; }
@@ -84,7 +84,7 @@ tbody tr:hover { background: #f2f7fb; }
 
 /* ---- drawer ---- */
 .drawer { position: fixed; top: 0; right: 0; width: 460px; max-width: 96vw; height: 100vh; background: #fff; box-shadow: -12px 0 40px rgba(0,0,0,.22); z-index: 800; display: flex; flex-direction: column; }
-.drawer-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #0d2137; color: #fff; }
+.drawer-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #d2403b; color: #fff; }
 .drawer-head button { background: none; border: 0; color: #fff; font-size: 17px; cursor: pointer; }
 #dBody { padding: 14px 18px; overflow: auto; }
 #dBody dl { display: grid; grid-template-columns: 130px 1fr; gap: 4px 10px; font-size: 13px; margin: 0 0 14px; }
@@ -94,3 +94,27 @@ tbody tr:hover { background: #f2f7fb; }
 #dBody .editrow { display: flex; gap: 6px; margin: 6px 0; }
 #dBody .editrow input, #dBody .editrow select { padding: 6px 8px; border: 1px solid #c6ced6; border-radius: 6px; font-size: 13px; }
 .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; background: #eef2f5; margin-right: 4px; }
+
+/* ---- Váš praktik brand ---- */
+.brand .logo { height: 34px; vertical-align: middle; margin-right: 6px; }
+.brand b { color: #d2403b; }
+input[type=range] { accent-color: #d2403b; }
+input[type=checkbox] { accent-color: #d2403b; }
+
+/* ---- města / řetězce / aktivita ---- */
+#tab-cities, #tab-chains, #tab-activity { padding: 12px 20px; overflow: auto; height: calc(100vh - 110px); }
+#citiesGrid, #chainsGrid { border-collapse: collapse; width: 100%; background: #fff; }
+#citiesGrid th, #chainsGrid th { position: sticky; top: 0; background: #eef2f5; text-align: left; padding: 8px 10px; font-size: 12px; cursor: pointer; border-bottom: 2px solid #dde3e9; }
+#citiesGrid td, #chainsGrid td { padding: 7px 10px; border-bottom: 1px solid #f0f3f6; font-size: 13px; }
+#citiesGrid tbody tr, #chainsGrid tbody tr { cursor: pointer; }
+#citiesGrid tbody tr:hover, #chainsGrid tbody tr:hover { background: #faf1f0; }
+.city-score { display: inline-block; min-width: 34px; text-align: center; padding: 1px 7px; border-radius: 999px; color: #fff; font-weight: 700; font-size: 12px; }
+.tag-mc { background: #f3e2e1; color: #a93430; border-radius: 999px; padding: 0 7px; font-size: 11px; }
+.tag-nem { background: #e8eef4; color: #1d5c8f; border-radius: 999px; padding: 0 7px; font-size: 11px; }
+.act-stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0 14px; }
+.act-card { background: #fff; border: 1px solid #dde3e9; border-radius: 10px; padding: 10px 16px; min-width: 130px; }
+.act-card b { display: block; font-size: 20px; color: #d2403b; }
+.act-day { margin: 14px 0 4px; font-weight: 700; color: #4a4a4a; }
+.act-row { background: #fff; border: 1px solid #eee; border-left: 3px solid #d2403b; border-radius: 8px; padding: 6px 12px; margin: 4px 0; font-size: 13px; }
+.act-row .muted { margin-left: 6px; }
+.sb-city { background: #e8a33d; }

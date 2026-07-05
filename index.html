@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.css">
 <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.Default.css">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🩺</text></svg>">
 </head>
 <body>
@@ -29,11 +29,14 @@
 <!-- ======= APP ======= -->
 <div id="app" class="hidden">
   <header>
-    <div class="brand">🩺 <b>DoctorRM</b> <span class="muted small" id="metaInfo"></span></div>
+    <div class="brand"><img src="logo.svg?v=5" alt="Váš praktik" class="logo"> <b>DoctorRM</b> <span class="muted small" id="metaInfo"></span></div>
     <nav>
       <button data-tab="table" class="tab active">📋 Tabulka</button>
       <button data-tab="map" class="tab">🗺️ Mapa</button>
       <button data-tab="score" class="tab">🎯 Příležitosti</button>
+      <button data-tab="cities" class="tab">🏙️ Města</button>
+      <button data-tab="chains" class="tab">🏥 Řetězce</button>
+      <button data-tab="activity" class="tab">📞 Aktivita</button>
       <button data-tab="settings" class="tab">⚙️ Nastavení</button>
     </nav>
     <div class="header-right"><span id="countInfo" class="count-pill"></span></div>
@@ -59,6 +62,22 @@
       <label title="Zahrnout i lékaře, u kterých zatím neznáme věk"><input type="checkbox" id="fVekUnknown" checked>i neznámý</label>
       <button id="f63" class="chip" title="věk 63+">63+</button>
     </div>
+    <div class="fgroup near" title="Vyhledávání v okolí místa vzdušnou čarou, bez ohledu na okresy">
+      📍 <input type="text" id="fNear" placeholder="okolí místa (např. Kuřim)" style="width:150px">
+      <input type="number" id="fNearKm" value="10" min="1" max="60" class="num" title="poloměr v km"> km
+      <span id="fNearInfo" class="muted small"></span>
+    </div>
+    <select id="fTyp" title="Samostatný praktik = ordinace jen s VPL (max +1 obor); v komplexu = součást zařízení s více obory">
+      <option value="">— typ ordinace —</option>
+      <option value="solo">Samostatní praktici</option>
+      <option value="komplex">Praktik v komplexu</option>
+    </select>
+    <select id="fChains" title="Řetězce se spravují v záložce Řetězce">
+      <option value="">řetězce: zobrazit vše</option>
+      <option value="noexcl">skrýt vyloučené řetězce</option>
+      <option value="none">skrýt všechny řetězce</option>
+      <option value="only">jen řetězce</option>
+    </select>
     <button id="fReset" class="chip">✕ reset</button>
   </div>
 
@@ -99,19 +118,49 @@
     <div class="score-config">
       <h3>Váhy scoringu <span class="muted small">(automaticky se přepočítává)</span></h3>
       <div class="sliders">
-        <label>Věk lékaře + shluk starších (63+) v okolí <b id="wAgeV">50 %</b><input type="range" id="wAge" min="0" max="100" value="50"></label>
-        <label>Potenciální kmen pacientů <b id="wKmenV">30 %</b><input type="range" id="wKmen" min="0" max="100" value="30"></label>
+        <label>Věk lékaře + shluk starších (63+) v okolí <b id="wAgeV">45 %</b><input type="range" id="wAge" min="0" max="100" value="45"></label>
+        <label>Potenciální kmen pacientů <b id="wKmenV">25 %</b><input type="range" id="wKmen" min="0" max="100" value="25"></label>
+        <label>Blízkost velkého města (20 000+) <b id="wCityV">10 %</b><input type="range" id="wCity" min="0" max="100" value="10"></label>
         <label>Blízkost lékařské fakulty <b id="wLfV">10 %</b><input type="range" id="wLf" min="0" max="100" value="10"></label>
         <label>Blízkost našich ordinací <b id="wVpV">10 %</b><input type="range" id="wVp" min="0" max="100" value="10"></label>
       </div>
       <p class="muted small">Věk: plný počet bodů od 63 let, náběh od 50 let; každý další lékař 63+ do 3 km = bonus.
-      Kmen: percentil potenciálního spádu (gravitační model 1/d²). LF: e^(−d/40 km). Naše ordinace: e^(−d/30 km).
-      U lékařů bez známého věku se věková složka počítá neutrálně (0,35).</p>
+      Kmen: percentil potenciálního spádu (gravitační model 1/d²). Město 20k+: e^(−d/20 km). LF: e^(−d/40 km).
+      Naše ordinace: e^(−d/30 km). U lékařů bez známého věku se věková složka počítá neutrálně (0,35).
+      Vyloučené řetězce (záložka Řetězce) lze skrýt filtrem nahoře.</p>
     </div>
     <h3>🏆 Top příležitosti k akvizici <span class="muted small" id="scoreScope"></span></h3>
     <div id="scoreList"></div>
     <h3>🗺️ Nejpodhodnocenější oblasti (nejvíc pacientů na praktika v okolí)</h3>
     <div id="areaList"></div>
+  </section>
+
+  <!-- ============ TAB: MĚSTA ============ -->
+  <section id="tab-cities" class="tabpane hidden">
+    <div class="cities-head">
+      <h3>🏙️ Nejperspektivnější města <span class="muted small">(města 10 000+, u Prahy a Brna městské části; praktici v okruhu — MČ 3 km, města 5 km, 100k+ 7 km)</span></h3>
+      <p class="muted small">Skóre města = 40 % počet praktiků 63+ · 30 % obyvatel na praktika (nedostatek) · 15 % velikost města · 15 % průměrný věk praktiků. Klik na řádek = vyfiltruje praktiky v okolí 10 km.</p>
+    </div>
+    <div id="citiesWrap"><table id="citiesGrid"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- ============ TAB: ŘETĚZCE ============ -->
+  <section id="tab-chains" class="tabpane hidden">
+    <div class="chains-head">
+      <h3>🏥 Řetězce a nemocnice <span class="muted small" id="chainsInfo"></span></h3>
+      <p class="muted small">Automaticky detekováno podle názvů, IČO s 3+ ordinacemi a druhu zařízení. Zaškrtnutím „vyloučit" se řetězec dá schovat filtrem „skrýt vyloučené řetězce" (tabulka, mapa i příležitosti). Záznam jde ručně přiřadit k řetězci v jeho detailu.</p>
+    </div>
+    <div id="chainsWrap"><table id="chainsGrid"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- ============ TAB: AKTIVITA ============ -->
+  <section id="tab-activity" class="tabpane hidden">
+    <div class="activity-head">
+      <h3>📞 Aktivita a log změn</h3>
+      <div id="actStats" class="act-stats"></div>
+      <p class="muted small">Každé uložení poznámky/stavu/kontaktů v detailu se zapíše sem (do tohoto prohlížeče). Kolegyně ti pošle export úprav (Nastavení → export) a ty ho naimportuješ — log i stavy se spojí.</p>
+    </div>
+    <div id="actLog"></div>
   </section>
 
   <!-- ============ TAB: NASTAVENÍ ============ -->
@@ -145,6 +194,6 @@
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/markercluster/leaflet.markercluster.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

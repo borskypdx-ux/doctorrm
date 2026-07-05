@@ -10,8 +10,11 @@ let DATA = null;          // dešifrovaný payload
 let GP_KMEN_SORTED = [];  // pro percentil
 let OLD_GPS = [];         // lékaři 63+ se souřadnicemi (pro shlukový bonus)
 let EDITS = loadJSON("drm_edits_v1", {});
-let WEIGHTS = loadJSON("drm_weights_v1", { age: 50, kmen: 30, lf: 10, vp: 10 });
-let FILTER = { text: "", obory: new Set([VPL]), kraj: "", okres: "", obec: "", vekMin: null, vekMax: null, vekUnknown: true };
+let LOG = loadJSON("drm_log_v1", []);
+let CHAIN_EXCL = new Set(loadJSON("drm_chainexcl_v1", []));
+let WEIGHTS = Object.assign({ age: 45, kmen: 25, city: 10, lf: 10, vp: 10 }, loadJSON("drm_weights_v1", {}));
+let FILTER = { text: "", obory: new Set([VPL]), kraj: "", okres: "", obec: "", vekMin: null, vekMax: null, vekUnknown: true, typ: "", chains: "", near: null };
+let CHAINS_BY_ID = {};
 let SORT = { key: "score", dir: -1 };
 let filtered = [];
 let map, clusterLayer, obceLayer, vpLayer, lfLayer;
@@ -115,13 +118,16 @@ function scoreComponents(r) {
   else if (vek >= 63) age = Math.min(0.75 + 0.125 * neighbours63(r), 1);
   else age = Math.max(0, Math.min((vek - 50) / 13, 1)) * 0.6;
   const kmen = kmenPercentile(r.kmen);
-  const dLf = minDist(r, DATA.lf), dVp = minDist(r, DATA.vp);
+  const dLf = minDist(r, DATA.lf), dVp = minDist(r, DATA.vp), dCity = minDist(r, DATA.big20 || []);
   const lf = dLf == null ? 0 : Math.exp(-dLf / 40);
   const vp = dVp == null ? 0 : Math.exp(-dVp / 30);
-  const W = WEIGHTS, tot = (W.age + W.kmen + W.lf + W.vp) || 1;
-  const score = 100 * (W.age * age + W.kmen * kmen + W.lf * lf + W.vp * vp) / tot;
-  return { score, age, kmen, lf, vp, vek };
+  const city = dCity == null ? 0 : Math.exp(-dCity / 20);
+  const W = WEIGHTS, tot = (W.age + W.kmen + W.city + W.lf + W.vp) || 1;
+  const score = 100 * (W.age * age + W.kmen * kmen + W.city * city + W.lf * lf + W.vp * vp) / tot;
+  return { score, age, kmen, city, lf, vp, vek };
 }
+function recChain(r) { const e = recEdit(r); return e.chain !== undefined ? (e.chain || null) : (r.chain || null); }
+function isSolo(r) { return r.gp && r.obory.length <= 2 && /^samost/i.test(r.druh); }
 const scoreCache = new Map();
 function recScore(r) {
   if (!r.gp) return null;
@@ -139,8 +145,10 @@ function rebuildOldGps() {
 const COLUMNS = [
   { key: "score",   label: "Score",       on: 1, get: (r) => { const s = recScore(r); return s ? Math.round(s.score) : null; },
     fmt: (v) => v == null ? "" : `<span class="score-badge" style="background:${scoreColor(v)}">${v}</span>` },
-  { key: "nazev",   label: "Název",       on: 1, get: (r) => r.nazev },
+  { key: "nazev",   label: "Název",       on: 1, get: (r) => recEdit(r).nazev ?? r.nazev },
   { key: "doctor",  label: "Lékař / odb. zástupce", on: 1, get: (r) => r.doctor || r.oz || "" },
+  { key: "chain",   label: "Řetězec",     on: 0, get: (r) => { const c = recChain(r); return c ? (CHAINS_BY_ID[c]?.name || c) : ""; } },
+  { key: "typord",  label: "Typ ordinace",on: 0, get: (r) => r.gp ? (isSolo(r) ? "samostatný" : "v komplexu") : "" },
   { key: "vek",     label: "Věk",         on: 1, get: (r) => recVek(r),
     fmt: (v) => v == null ? '<span class="muted">?</span>' : `<span class="${v >= 63 ? "age-red" : v >= 55 ? "age-orange" : ""}">${v}</span>` },
   { key: "narozeni",label: "Rok narození",on: 0, get: (r) => recNarozeni(r) },
@@ -156,13 +164,15 @@ const COLUMNS = [
   { key: "druh",    label: "Druh zařízení", on: 0, get: (r) => r.druh },
   { key: "typ",     label: "FO/PO",       on: 0, get: (r) => r.typ },
   { key: "ico",     label: "IČO",         on: 0, get: (r) => r.ico },
-  { key: "tel",     label: "Telefon",     on: 1, get: (r) => r.tel },
-  { key: "email",   label: "E-mail",      on: 0, get: (r) => r.email },
+  { key: "tel",     label: "Telefon",     on: 1, get: (r) => recEdit(r).tel ?? r.tel },
+  { key: "email",   label: "E-mail",      on: 1, get: (r) => recEdit(r).email ?? r.email },
+  { key: "ordoba",  label: "Ordinační doba", on: 1, get: (r) => recEdit(r).ordoba || "" },
   { key: "web",     label: "Web",         on: 0, get: (r) => r.web },
   { key: "zahajeni",label: "Zahájení činnosti", on: 0, get: (r) => r.zahajeni },
   { key: "pozn",    label: "Poznámka",    on: 1, get: (r) => recEdit(r).pozn || "" },
 ];
 let visibleCols = loadJSON("drm_cols_v1", null) || COLUMNS.filter((c) => c.on).map((c) => c.key);
+if (!visibleCols.includes("ordoba")) visibleCols = [...visibleCols, "email", "ordoba"].filter((v, i, a) => a.indexOf(v) === i); // migrace: nové sloupce
 function scoreColor(v) { return v >= 70 ? "#c0392b" : v >= 50 ? "#d97e12" : v >= 30 ? "#2a9d8f" : "#8a949e"; }
 
 /* ================= FILTRY ================= */
@@ -178,6 +188,17 @@ function applyFilters() {
       if (v == null) { if (!FILTER.vekUnknown) return false; }
       else if ((FILTER.vekMin != null && v < FILTER.vekMin) || (FILTER.vekMax != null && v > FILTER.vekMax)) return false;
     }
+    if (FILTER.typ === "solo" && !isSolo(r)) return false;
+    if (FILTER.typ === "komplex" && (!r.gp || isSolo(r))) return false;
+    const ch = recChain(r);
+    if (FILTER.chains === "none" && ch) return false;
+    if (FILTER.chains === "noexcl" && ch && CHAIN_EXCL.has(ch)) return false;
+    if (FILTER.chains === "only" && !ch) return false;
+    if (FILTER.near) {
+      if (r.lat == null) return false;
+      if (distKm(r.lat, r.lon, FILTER.near.lat, FILTER.near.lon) > FILTER.near.km) return false;
+    }
+    if (FILTER.chainSel && !FILTER.chainSel.has(r.id)) return false;
     if (t) {
       const hay = norm(r.nazev + " " + (r.doctor || "") + " " + (r.oz || "") + " " + r.obec + " " + r.ico + " " + (recEdit(r).pozn || ""));
       if (!hay.includes(t)) return false;
@@ -188,8 +209,9 @@ function applyFilters() {
   $("#countInfo").textContent = filtered.length.toLocaleString("cs") + " záznamů";
   renderTable();
   mapDirty = true;
-  if (!$("#tab-map").classList.contains("hidden")) renderMap();
+  if (!$("#tab-map").classList.contains("hidden")) { renderMap(); syncNearCircle(); }
   renderScoreTab();
+  renderCities();
 }
 function sortFiltered() {
   const col = COLUMNS.find((c) => c.key === SORT.key);
@@ -286,7 +308,7 @@ function renderScoreTab() {
   $("#scoreScope").textContent = `(z ${gp.length.toLocaleString("cs")} praktiků dle aktivních filtrů)`;
   const scored = gp.map((r) => ({ r, s: recScore(r) })).filter((x) => x.s)
     .sort((a, b) => b.s.score - a.s.score).slice(0, 100);
-  const W = WEIGHTS, tot = (W.age + W.kmen + W.lf + W.vp) || 1;
+  const W = WEIGHTS, tot = (W.age + W.kmen + W.city + W.lf + W.vp) || 1;
   $("#scoreList").innerHTML = scored.map((x, i) => {
     const { r, s } = x;
     const bw = (v, w) => Math.round(220 * (v * w / tot));
@@ -296,8 +318,9 @@ function renderScoreTab() {
       <div class="who"><div class="nm">${esc(r.nazev)}</div>
         <div class="muted small">${esc(r.doctor || r.oz || "?")} · ${esc(r.obec)} (${esc(r.okres)})
         ${s.vek != null ? "· <b>" + s.vek + " let</b>" : "· věk ?"} · kmen ${r.kmen?.toLocaleString("cs") ?? "?"}</div></div>
-      <div class="score-bars" title="věk ${(s.age * 100).toFixed(0)} % · kmen ${(s.kmen * 100).toFixed(0)} % · LF ${(s.lf * 100).toFixed(0)} % · VP ${(s.vp * 100).toFixed(0)} %">
+      <div class="score-bars" title="věk ${(s.age * 100).toFixed(0)} % · kmen ${(s.kmen * 100).toFixed(0)} % · město ${(s.city * 100).toFixed(0)} % · LF ${(s.lf * 100).toFixed(0)} % · VP ${(s.vp * 100).toFixed(0)} %">
         <i class="sb-age" style="width:${bw(s.age, W.age)}px"></i><i class="sb-kmen" style="width:${bw(s.kmen, W.kmen)}px"></i>
+        <i class="sb-city" style="width:${bw(s.city, W.city)}px"></i>
         <i class="sb-lf" style="width:${bw(s.lf, W.lf)}px"></i><i class="sb-vp" style="width:${bw(s.vp, W.vp)}px"></i>
       </div></div>`;
   }).join("") || '<p class="muted">Žádní praktici v aktuálním filtru.</p>';
@@ -333,43 +356,226 @@ window.openDetail = function (id) {
     ["Zahájení činnosti", r.zahajeni || "—"],
     ["Potenc. kmen", r.kmen != null ? r.kmen.toLocaleString("cs") + " pacientů (gravitační model)" : "—"],
   ];
-  if (s) rows.push(["Score", `<b>${Math.round(s.score)}</b> — věk ${(s.age * 100).toFixed(0)} %, kmen ${(s.kmen * 100).toFixed(0)} %, LF ${(s.lf * 100).toFixed(0)} %, VP ${(s.vp * 100).toFixed(0)} % · lékařů 63+ do 3 km: ${neighbours63(r)}`]);
+  if (s) rows.push(["Score", `<b>${Math.round(s.score)}</b> — věk ${(s.age * 100).toFixed(0)} %, kmen ${(s.kmen * 100).toFixed(0)} %, město ${(s.city * 100).toFixed(0)} %, LF ${(s.lf * 100).toFixed(0)} %, VP ${(s.vp * 100).toFixed(0)} % · lékařů 63+ do 3 km: ${neighbours63(r)}`]);
+  const ch = recChain(r);
+  if (ch) rows.push(["Řetězec", esc(CHAINS_BY_ID[ch]?.name || ch)]);
   if (r.lat != null) rows.push(["Mapa", `<a href="https://mapy.cz/turisticka?q=${r.lat},${r.lon}" target="_blank">mapy.cz</a> · <a href="https://www.google.com/maps?q=${r.lat},${r.lon}" target="_blank">Google</a>`]);
+  if (r.ico) rows.push(["Rejstříky", `<a href="https://ares.gov.cz/ekonomicke-subjekty?ico=${r.ico}" target="_blank">ARES →</a> · <a href="https://or.justice.cz/ias/ui/rejstrik-$firma?ico=${r.ico}&jenPlatne=PLATNE&polozek=50&typHledani=STARTS_WITH" target="_blank">justice.cz →</a>`]);
   rows.push(["ČLK", `<a href="https://www.lkcr.cz/seznam-lekaru" target="_blank">ověřit v seznamu lékařů →</a>`]);
 
+  const STAVY = ["", "Nekontaktováno", "Nedovoláno", "Dovoláno – nechce", "Dovoláno – zájem",
+                 "Osloveno", "Jedná se", "Due diligence", "Koupeno", "Nezájem", "Nerelevantní"];
+  const chainOpts = ['<option value="">— bez řetězce —</option>']
+    .concat((DATA.chains || []).map((c) => `<option value="${esc(c.id)}" ${ch === c.id ? "selected" : ""}>${esc(c.name)} (${c.count})</option>`))
+    .join("");
   $("#dBody").innerHTML =
     `<dl>${rows.map(([k, vv]) => `<dt>${k}</dt><dd>${vv}</dd>`).join("")}</dl>
-     <h4>Moje údaje</h4>
+     <h4>Moje údaje <span class="muted small">(přepíší data z registru, ukládá se log)</span></h4>
      <div class="editrow">
-       <select id="eStav">
-         ${["", "Nekontaktováno", "Osloveno", "Jedná se", "Due diligence", "Koupeno", "Nezájem", "Nerelevantní"]
-           .map((o) => `<option ${o === (e.stav || "") ? "selected" : ""}>${o}</option>`).join("")}
-       </select>
-       <input id="ePromoce" type="number" placeholder="rok promoce" value="${e.promoce ?? ""}" style="width:110px">
-       <input id="eVek" type="number" placeholder="věk (přepíše)" value="${e.vek ?? ""}" style="width:110px">
+       <select id="eStav" style="flex:1">${STAVY.map((o) => `<option ${o === (e.stav || "") ? "selected" : ""}>${o}</option>`).join("")}</select>
+       <input id="ePromoce" type="number" placeholder="rok promoce" value="${e.promoce ?? ""}" style="width:105px">
+       <input id="eVek" type="number" placeholder="věk (přepíše)" value="${e.vek ?? ""}" style="width:105px">
      </div>
+     <div class="editrow"><input id="eNazev" placeholder="název (oprava)" value="${esc(e.nazev ?? "")}" style="flex:1"></div>
+     <div class="editrow">
+       <input id="eTel" placeholder="telefon" value="${esc(e.tel ?? "")}" style="flex:1">
+       <input id="eEmail" placeholder="e-mail" value="${esc(e.email ?? "")}" style="flex:1">
+     </div>
+     <div class="editrow"><input id="eOrdoba" placeholder="ordinační doba (např. Po 8–12, St 13–18…)" value="${esc(e.ordoba ?? "")}" style="flex:1"></div>
+     <div class="editrow"><select id="eChain" style="flex:1">${chainOpts}</select></div>
      <textarea id="ePozn" placeholder="poznámka…">${esc(e.pozn || "")}</textarea>
      <div class="editrow"><button class="chip" id="eSave">💾 uložit</button><span class="muted small" id="eMsg"></span></div>`;
   $("#eSave").onclick = () => {
+    const old = EDITS[r.id] || {};
     const ed = {};
     if ($("#eStav").value) ed.stav = $("#eStav").value;
     if ($("#ePromoce").value) ed.promoce = +$("#ePromoce").value;
     if ($("#eVek").value) ed.vek = +$("#eVek").value;
+    for (const [fid, key] of [["eNazev", "nazev"], ["eTel", "tel"], ["eEmail", "email"], ["eOrdoba", "ordoba"]]) {
+      const v = $("#" + fid).value.trim();
+      if (v) ed[key] = v;
+    }
+    if ($("#eChain").value !== (r.chain || "")) ed.chain = $("#eChain").value; // ruční přeřazení
     if ($("#ePozn").value.trim()) ed.pozn = $("#ePozn").value.trim();
+    // log změn
+    const changes = {};
+    for (const k of new Set([...Object.keys(old), ...Object.keys(ed)])) {
+      if (JSON.stringify(old[k]) !== JSON.stringify(ed[k])) changes[k] = [old[k] ?? null, ed[k] ?? null];
+    }
+    if (Object.keys(changes).length) {
+      LOG.push({ t: new Date().toISOString(), id: r.id, nazev: recEdit(r).nazev ?? r.nazev, obec: r.obec, changes });
+      saveJSON("drm_log_v1", LOG);
+    }
     if (Object.keys(ed).length) EDITS[r.id] = ed; else delete EDITS[r.id];
     saveJSON("drm_edits_v1", EDITS);
-    invalidateScores(); applyFilters();
+    invalidateScores(); applyFilters(); renderActivity();
     $("#eMsg").textContent = "uloženo ✓";
     setTimeout(() => $("#eMsg").textContent = "", 1500);
   };
   $("#drawer").classList.remove("hidden");
 };
 
+/* ================= MĚSTA ================= */
+let citySort = { key: "score", dir: -1 };
+function computeCities() {
+  const gps = DATA.records.filter((r) => r.gp && r.lat != null);
+  const rows = (DATA.cities || []).map((c) => {
+    const R = c.mc ? 3 : (c.pop >= 100000 ? 7 : 5);
+    const near = gps.filter((r) => Math.abs(r.lat - c.lat) < 0.12 && Math.abs(r.lon - c.lon) < 0.18 &&
+                                   distKm(r.lat, r.lon, c.lat, c.lon) <= R);
+    const ages = near.map(recVek).filter((v) => v != null);
+    const n63 = ages.filter((v) => v >= 63).length;
+    const avgAge = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : null;
+    const perGp = near.length ? c.pop / near.length : c.pop;
+    return { ...c, R, n: near.length, n63, avgAge, perGp };
+  });
+  const pct = (arr, v) => { const s = [...arr].sort((a, b) => a - b); let lo = 0, hi = s.length; while (lo < hi) { const m = (lo + hi) >> 1; if (s[m] <= v) lo = m + 1; else hi = m; } return s.length ? lo / s.length : 0; };
+  const a63 = rows.map((r) => r.n63), aPer = rows.map((r) => Math.min(r.perGp, 6000)), aPop = rows.map((r) => r.pop), aAge = rows.map((r) => r.avgAge ?? 0);
+  for (const r of rows) {
+    r.score = Math.round(100 * (0.40 * pct(a63, r.n63) + 0.30 * pct(aPer, Math.min(r.perGp, 6000)) +
+                                0.15 * pct(aPop, r.pop) + 0.15 * pct(aAge, r.avgAge ?? 0)));
+  }
+  return rows;
+}
+function renderCities() {
+  if ($("#tab-cities").classList.contains("hidden")) return;
+  const rows = computeCities();
+  const dirMul = citySort.dir;
+  rows.sort((a, b) => { const va = a[citySort.key] ?? -1, vb = b[citySort.key] ?? -1; return (typeof va === "number" ? va - vb : String(va).localeCompare(String(vb), "cs")) * dirMul; });
+  const cols = [["score", "Skóre"], ["name", "Město"], ["pop", "Obyvatel"], ["n", "Praktiků (okruh)"], ["n63", "Praktiků 63+"], ["avgAge", "Prům. věk"], ["perGp", "Obyv./praktika"]];
+  $("#citiesGrid thead").innerHTML = "<tr>" + cols.map(([k, l]) => `<th data-k="${k}">${l}${citySort.key === k ? (citySort.dir > 0 ? " ▲" : " ▼") : ""}</th>`).join("") + "</tr>";
+  $("#citiesGrid tbody").innerHTML = rows.map((r) =>
+    `<tr data-lat="${r.lat}" data-lon="${r.lon}" data-name="${esc(r.name)}">
+      <td><span class="city-score" style="background:${scoreColor(r.score)}">${r.score}</span></td>
+      <td><b>${esc(r.name)}</b> ${r.mc ? '<span class="tag-mc">MČ</span>' : ""}</td>
+      <td>${r.pop.toLocaleString("cs")}</td><td>${r.n}</td>
+      <td>${r.n63 ? `<span class="age-red">${r.n63}</span>` : "0"}</td>
+      <td>${r.avgAge != null ? r.avgAge.toFixed(1) : '<span class="muted">?</span>'}</td>
+      <td>${Math.round(r.perGp).toLocaleString("cs")}</td></tr>`).join("");
+  $("#citiesGrid thead").onclick = (e) => {
+    const th = e.target.closest("th"); if (!th) return;
+    const k = th.dataset.k;
+    if (citySort.key === k) citySort.dir *= -1; else citySort = { key: k, dir: k === "name" ? 1 : -1 };
+    renderCities();
+  };
+  $("#citiesGrid tbody").onclick = (e) => {
+    const tr = e.target.closest("tr"); if (!tr) return;
+    setNearFilter(tr.dataset.name, +tr.dataset.lat, +tr.dataset.lon, 10);
+    $$('nav .tab').find((b) => b.dataset.tab === "table").click();
+  };
+}
+
+/* ================= ŘETĚZCE ================= */
+function manualChains() {
+  // ručně přiřazené řetězce z úprav (hodnoty edit.chain, které neznáme z buildu)
+  const extra = {};
+  for (const [id, e] of Object.entries(EDITS)) {
+    if (e.chain && !CHAINS_BY_ID[e.chain]) (extra[e.chain] = extra[e.chain] || []).push(id);
+  }
+  return Object.entries(extra).map(([name, ids]) => ({ id: name, name, type: "ruční", count: ids.length, kraje: [], ids }));
+}
+function renderChains() {
+  if ($("#tab-chains").classList.contains("hidden")) return;
+  const all = [...(DATA.chains || []), ...manualChains()];
+  $("#chainsInfo").textContent = `(${all.length} skupin, ${all.reduce((s, c) => s + c.count, 0)} ordinací praktiků)`;
+  $("#chainsGrid thead").innerHTML = "<tr><th>Vyloučit</th><th>Řetězec / nemocnice</th><th>Typ</th><th>Ordinací (VPL)</th><th>Kraje</th></tr>";
+  $("#chainsGrid tbody").innerHTML = all.map((c) =>
+    `<tr data-id="${esc(c.id)}">
+      <td><input type="checkbox" class="chx" data-id="${esc(c.id)}" ${CHAIN_EXCL.has(c.id) ? "checked" : ""} title="vyloučit z příležitostí (filtr: skrýt vyloučené řetězce)"></td>
+      <td><b>${esc(c.name)}</b></td>
+      <td>${c.type === "nemocnice" ? '<span class="tag-nem">nemocnice</span>' : esc(c.type)}</td>
+      <td>${c.count}</td>
+      <td class="muted small">${esc((c.kraje || []).map((k) => k.replace(" kraj", "")).join(", "))}</td></tr>`).join("");
+  $$("#chainsGrid .chx").forEach((cb) => cb.onchange = () => {
+    if (cb.checked) CHAIN_EXCL.add(cb.dataset.id); else CHAIN_EXCL.delete(cb.dataset.id);
+    saveJSON("drm_chainexcl_v1", [...CHAIN_EXCL]);
+    applyFilters();
+  });
+  $("#chainsGrid tbody").onclick = (e) => {
+    if (e.target.classList.contains("chx")) return;
+    const tr = e.target.closest("tr"); if (!tr) return;
+    FILTER.text = ""; $("#fText").value = "";
+    const c = [...(DATA.chains || []), ...manualChains()].find((x) => x.id === tr.dataset.id);
+    if (!c) return;
+    FILTER.chainSel = new Set(c.ids);
+    $$('nav .tab').find((b) => b.dataset.tab === "table").click();
+    applyFilters();
+  };
+}
+
+/* ================= AKTIVITA ================= */
+function renderActivity() {
+  if ($("#tab-activity").classList.contains("hidden")) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const week = new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10);
+  const calls = (l) => l.changes?.stav?.[1] || "";
+  const isCall = (v) => /dovol/i.test(v);
+  const tCalls = LOG.filter((l) => l.t.slice(0, 10) === today && isCall(calls(l)));
+  const wCalls = LOG.filter((l) => l.t.slice(0, 10) >= week && isCall(calls(l)));
+  const succ = (arr) => arr.filter((l) => /zájem/i.test(calls(l))).length;
+  $("#actStats").innerHTML = `
+    <div class="act-card"><b>${LOG.filter((l) => l.t.slice(0, 10) === today).length}</b>úprav dnes</div>
+    <div class="act-card"><b>${tCalls.length}</b>hovorů dnes</div>
+    <div class="act-card"><b>${succ(tCalls)}</b>se zájmem dnes</div>
+    <div class="act-card"><b>${wCalls.length}</b>hovorů za 7 dní</div>
+    <div class="act-card"><b>${wCalls.length ? Math.round(100 * succ(wCalls) / wCalls.length) : 0} %</b>úspěšnost 7 dní</div>`;
+  const fmtCh = (ch) => Object.entries(ch).map(([k, [o, n]]) =>
+    `<b>${esc(k)}</b>: ${esc(String(o ?? "—"))} → <b>${esc(String(n ?? "—"))}</b>`).join(" · ");
+  const byDay = {};
+  for (const l of [...LOG].reverse().slice(0, 300)) (byDay[l.t.slice(0, 10)] = byDay[l.t.slice(0, 10)] || []).push(l);
+  $("#actLog").innerHTML = Object.entries(byDay).map(([day, items]) =>
+    `<div class="act-day">${day} <span class="muted small">(${items.length})</span></div>` +
+    items.map((l) => `<div class="act-row"><a href="#" onclick="openDetail('${l.id}');return false;">${esc(l.nazev)}</a>
+      <span class="muted small">${esc(l.obec || "")} · ${l.t.slice(11, 16)}</span><br>${fmtCh(l.changes)}</div>`).join("")
+  ).join("") || '<p class="muted">Zatím žádné změny. Ulož poznámku nebo stav v detailu záznamu.</p>';
+}
+
+/* ================= OKOLÍ (radius) ================= */
+function resolvePlace(q) {
+  const nq = norm(q);
+  if (!nq) return null;
+  const pools = [DATA.cities || [], DATA.obce || []];
+  for (const pool of pools) {
+    let hit = pool.find((c) => norm(c.name) === nq) || pool.find((c) => norm(c.name).startsWith(nq));
+    if (hit) return { name: hit.name, lat: hit.lat, lon: hit.lon };
+  }
+  const r = DATA.records.find((x) => x.lat != null && norm(x.obec) === nq) ||
+            DATA.records.find((x) => x.lat != null && norm(x.obec).startsWith(nq));
+  return r ? { name: r.obec, lat: r.lat, lon: r.lon } : null;
+}
+let nearCircle = null;
+function setNearFilter(name, lat, lon, km) {
+  FILTER.near = { name, lat, lon, km };
+  $("#fNear").value = name;
+  $("#fNearKm").value = km;
+  $("#fNearInfo").textContent = "✓ " + name;
+  applyFilters();
+}
+function updateNearUI() {
+  const q = $("#fNear").value.trim();
+  const km = Math.max(1, +$("#fNearKm").value || 10);
+  if (!q) { FILTER.near = null; $("#fNearInfo").textContent = ""; applyFilters(); return; }
+  const p = resolvePlace(q);
+  if (p) { FILTER.near = { ...p, km }; $("#fNearInfo").textContent = "✓ " + p.name; }
+  else { FILTER.near = null; $("#fNearInfo").textContent = "nenalezeno"; }
+  applyFilters();
+}
+function syncNearCircle() {
+  if (!map) return;
+  if (nearCircle) { map.removeLayer(nearCircle); nearCircle = null; }
+  if (FILTER.near) {
+    nearCircle = L.circle([FILTER.near.lat, FILTER.near.lon],
+      { radius: FILTER.near.km * 1000, color: "#d2403b", weight: 2, fillOpacity: 0.05 }).addTo(map);
+    map.fitBounds(nearCircle.getBounds());
+  }
+}
+
 /* ================= UI WIRING ================= */
 function initApp() {
   $("#login").classList.add("hidden");
   $("#app").classList.remove("hidden");
   GP_KMEN_SORTED = DATA.records.filter((r) => r.kmen != null).map((r) => r.kmen).sort((a, b) => a - b);
+  (DATA.chains || []).forEach((c) => CHAINS_BY_ID[c.id] = c);
   rebuildOldGps();
 
   $("#metaInfo").textContent = `· ${DATA.meta.counts.records.toLocaleString("cs")} zařízení · ${DATA.meta.counts.gp.toLocaleString("cs")} praktiků · data ${DATA.meta.builtAt}`;
@@ -421,10 +627,16 @@ function initApp() {
     if (on) { FILTER.vekUnknown = false; $("#fVekUnknown").checked = false; }
     applyFilters();
   };
+  $("#fTyp").onchange = () => { FILTER.typ = $("#fTyp").value; applyFilters(); };
+  $("#fChains").onchange = () => { FILTER.chains = $("#fChains").value; applyFilters(); };
+  $("#fNear").oninput = debounce(updateNearUI, 400);
+  $("#fNearKm").oninput = debounce(updateNearUI, 400);
   $("#fReset").onclick = () => {
-    FILTER = { text: "", obory: new Set([VPL]), kraj: "", okres: "", obec: "", vekMin: null, vekMax: null, vekUnknown: true };
+    FILTER = { text: "", obory: new Set([VPL]), kraj: "", okres: "", obec: "", vekMin: null, vekMax: null, vekUnknown: true, typ: "", chains: "", near: null };
+    delete FILTER.chainSel;
     $("#fText").value = ""; $("#fKraj").value = ""; $("#fObec").value = ""; $("#fVekMin").value = ""; $("#fVekMax").value = "";
     $("#fVekUnknown").checked = true; $("#f63").classList.remove("on");
+    $("#fTyp").value = ""; $("#fChains").value = ""; $("#fNear").value = ""; $("#fNearKm").value = 10; $("#fNearInfo").textContent = "";
     $$("#oborList input").forEach((i) => i.checked = i.value === VPL);
     syncOkres(); syncObce(); syncOborCount(); applyFilters();
   };
@@ -466,8 +678,11 @@ function initApp() {
     $$("nav .tab").forEach((x) => x.classList.toggle("active", x === b));
     $$(".tabpane").forEach((p) => p.classList.add("hidden"));
     $("#tab-" + b.dataset.tab).classList.remove("hidden");
-    if (b.dataset.tab === "map") { if (!map) initMap(); renderMap(); setTimeout(() => map.invalidateSize(), 60); }
+    if (b.dataset.tab === "map") { if (!map) initMap(); renderMap(); syncNearCircle(); setTimeout(() => map.invalidateSize(), 60); }
     if (b.dataset.tab === "score") renderScoreTab();
+    if (b.dataset.tab === "cities") renderCities();
+    if (b.dataset.tab === "chains") renderChains();
+    if (b.dataset.tab === "activity") renderActivity();
   });
 
   // mapa vrstvy
@@ -477,7 +692,7 @@ function initApp() {
   $("#layerLf").onchange = (e) => e.target.checked ? map.addLayer(lfLayer) : map.removeLayer(lfLayer);
 
   // scoring váhy
-  for (const k of ["age", "kmen", "lf", "vp"]) {
+  for (const k of ["age", "kmen", "city", "lf", "vp"]) {
     const el = $("#w" + k[0].toUpperCase() + k.slice(1));
     el.value = WEIGHTS[k];
     $("#w" + k[0].toUpperCase() + k.slice(1) + "V").textContent = WEIGHTS[k] + " %";
@@ -497,16 +712,28 @@ function initApp() {
     `Roky promoce ČLK: seznam je chráněný reCAPTCHA — doplňuje se ručně (detail lékaře / import)`,
     `Sestaveno: ${DATA.meta.builtAt}`,
   ].map((x) => `<li>${x}</li>`).join("");
-  $("#exportEdits").onclick = () => download("doctorrm-upravy.json", JSON.stringify(EDITS, null, 1));
+  $("#exportEdits").onclick = () => download("doctorrm-upravy.json",
+    JSON.stringify({ format: 2, edits: EDITS, log: LOG, chainExcl: [...CHAIN_EXCL] }, null, 1));
   $("#importEditsBtn").onclick = () => $("#importEdits").click();
   $("#importEdits").onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
     try {
       const imp = JSON.parse(await f.text());
-      EDITS = { ...EDITS, ...imp };
+      const edits = imp.format === 2 ? imp.edits : imp;          // starý formát = přímo edits
+      EDITS = { ...EDITS, ...edits };
       saveJSON("drm_edits_v1", EDITS);
-      invalidateScores(); applyFilters();
-      alert("Importováno " + Object.keys(imp).length + " záznamů.");
+      if (imp.format === 2 && Array.isArray(imp.log)) {          // spojit logy bez duplicit
+        const seen = new Set(LOG.map((l) => l.t + "|" + l.id));
+        for (const l of imp.log) if (!seen.has(l.t + "|" + l.id)) LOG.push(l);
+        LOG.sort((a, b) => a.t.localeCompare(b.t));
+        saveJSON("drm_log_v1", LOG);
+      }
+      if (imp.format === 2 && Array.isArray(imp.chainExcl)) {
+        imp.chainExcl.forEach((c) => CHAIN_EXCL.add(c));
+        saveJSON("drm_chainexcl_v1", [...CHAIN_EXCL]);
+      }
+      invalidateScores(); applyFilters(); renderActivity();
+      alert("Importováno " + Object.keys(edits).length + " záznamů" + (imp.log ? ` + ${imp.log.length} položek logu` : "") + ".");
     } catch (err) { alert("Chyba importu: " + err.message); }
   };
   $("#resetEdits").onclick = () => {

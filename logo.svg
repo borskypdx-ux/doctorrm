@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="168" height="46" viewBox="0 0 168 46">
+  <!-- stylizovaný stetoskop -->
+  <path d="M22 8 a10 10 0 1 0 -12 10" stroke="#9b9b9a" fill="none" stroke-width="5" stroke-linecap="round"/>
+  <path d="M10 18 q2 10 12 12" stroke="#c4c4c3" fill="none" stroke-width="4" stroke-linecap="round"/>
+  <!-- Váš -->
+  <text x="58" y="16" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="15" fill="#9b9b9a">Váš</text>
+  <!-- praktik -->
+  <text x="26" y="39" font-family="'Arial Black', Arial, sans-serif" font-weight="900" font-size="26" letter-spacing="-1" fill="#d2403b">praktik</text>
+  <!-- membrána stetoskopu -->
+  <circle cx="152" cy="31" r="7.5" fill="none" stroke="#9b9b9a" stroke-width="4.5"/>
+  <circle cx="152" cy="31" r="2.2" fill="#9b9b9a"/>
+</svg>
