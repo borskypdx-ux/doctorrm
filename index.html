@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.css">
 <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.Default.css">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🩺</text></svg>">
 </head>
 <body>
@@ -29,11 +29,12 @@
 <!-- ======= APP ======= -->
 <div id="app" class="hidden">
   <header>
-    <div class="brand"><img src="logo.svg?v=5" alt="Váš praktik" class="logo"> <b>DoctorRM</b> <span class="muted small" id="metaInfo"></span></div>
+    <div class="brand"><img src="logo.svg?v=6" alt="Váš praktik" class="logo"> <b>DoctorRM</b> <span class="muted small" id="metaInfo"></span></div>
     <nav>
       <button data-tab="table" class="tab active">📋 Tabulka</button>
       <button data-tab="map" class="tab">🗺️ Mapa</button>
       <button data-tab="score" class="tab">🎯 Příležitosti</button>
+      <button data-tab="zajem" class="tab">☎️ Zájem <b id="zajemCount"></b></button>
       <button data-tab="cities" class="tab">🏙️ Města</button>
       <button data-tab="chains" class="tab">🏥 Řetězce</button>
       <button data-tab="activity" class="tab">📞 Aktivita</button>
@@ -135,6 +136,18 @@
     <div id="areaList"></div>
   </section>
 
+  <!-- ============ TAB: ZÁJEM ============ -->
+  <section id="tab-zajem" class="tabpane hidden">
+    <div class="zajem-head">
+      <h3>☎️ Zájem — seznam k navolání</h3>
+      <div id="zjStats" class="act-stats"></div>
+      <p class="muted small">Do seznamu se praktik přidá tlačítkem ☎ v tabulce nebo v detailu. Stav a poznámku jde měnit
+      rovnou tady (uloží se okamžitě a zapíše do logu — v záložce Aktivita pak vidíš, kolik bylo navoláno a s jakým výsledkem).
+      Pro kolegyni: vyfiltruj co volat (např. okolí místa), přidej ☎, ona si otevře Zájem a jede odshora.</p>
+    </div>
+    <div id="zajemWrap"><table id="zajemGrid"><thead></thead><tbody></tbody></table></div>
+  </section>
+
   <!-- ============ TAB: MĚSTA ============ -->
   <section id="tab-cities" class="tabpane hidden">
     <div class="cities-head">
@@ -194,6 +207,6 @@
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/markercluster/leaflet.markercluster.js"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

@@ -118,3 +118,17 @@ input[type=checkbox] { accent-color: #d2403b; }
 .act-row { background: #fff; border: 1px solid #eee; border-left: 3px solid #d2403b; border-radius: 8px; padding: 6px 12px; margin: 4px 0; font-size: 13px; }
 .act-row .muted { margin-left: 6px; }
 .sb-city { background: #e8a33d; }
+
+/* ---- zájem / call list ---- */
+.callbtn { border: 1px solid #d2403b; background: #fff; color: #d2403b; border-radius: 6px; padding: 1px 8px; cursor: pointer; font-size: 13px; }
+.callbtn:hover { background: #f3e2e1; }
+.callbtn.in { background: #d2403b; color: #fff; }
+#tab-zajem { padding: 12px 20px; overflow: auto; height: calc(100vh - 110px); }
+#zajemGrid { border-collapse: collapse; width: 100%; background: #fff; }
+#zajemGrid th { position: sticky; top: 0; background: #eef2f5; text-align: left; padding: 8px 10px; font-size: 12px; border-bottom: 2px solid #dde3e9; }
+#zajemGrid td { padding: 6px 10px; border-bottom: 1px solid #f0f3f6; font-size: 13px; }
+#zajemGrid tbody tr:hover { background: #faf1f0; }
+#zajemGrid .zj-pozn { width: 100%; min-width: 160px; padding: 5px 7px; border: 1px solid #d9dee3; border-radius: 6px; }
+#zajemGrid .zj-stav { padding: 5px 7px; border: 1px solid #d9dee3; border-radius: 6px; }
+#zajemGrid .zj-quick { padding: 3px 7px; margin-right: 2px; }
+#zajemCount { color: inherit; }

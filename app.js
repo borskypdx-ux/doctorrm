@@ -128,6 +128,39 @@ function scoreComponents(r) {
 }
 function recChain(r) { const e = recEdit(r); return e.chain !== undefined ? (e.chain || null) : (r.chain || null); }
 function isSolo(r) { return r.gp && r.obory.length <= 2 && /^samost/i.test(r.druh); }
+
+const STAVY = ["", "Nekontaktováno", "Nedovoláno", "Dovoláno – nechce", "Dovoláno – zájem",
+               "Osloveno", "Jedná se", "Due diligence", "Koupeno", "Nezájem", "Nerelevantní"];
+
+/* změna jednoho pole úprav + zápis do logu (používá Zájem i detail) */
+function setEditField(id, key, value) {
+  const r = DATA.records.find((x) => x.id === id);
+  if (!r) return;
+  const old = EDITS[id] || {};
+  const ed = { ...old };
+  if (value === undefined || value === null || value === "" || value === false) delete ed[key];
+  else ed[key] = value;
+  if (JSON.stringify(old[key]) !== JSON.stringify(ed[key])) {
+    LOG.push({ t: new Date().toISOString(), id, nazev: ed.nazev ?? r.nazev, obec: r.obec,
+               changes: { [key]: [old[key] ?? null, ed[key] ?? null] } });
+    saveJSON("drm_log_v1", LOG);
+  }
+  if (Object.keys(ed).length) EDITS[id] = ed; else delete EDITS[id];
+  saveJSON("drm_edits_v1", EDITS);
+}
+function toggleZajem(id) {
+  const inList = !!(EDITS[id] && EDITS[id].zajem);
+  setEditField(id, "zajem", inList ? null : 1);
+  if (!inList) setEditField(id, "zajemT", new Date().toISOString().slice(0, 10));
+  else setEditField(id, "zajemT", null);
+  syncZajemCount();
+  renderRows(); renderZajem(); renderActivity();
+}
+function zajemList() { return DATA.records.filter((r) => recEdit(r).zajem); }
+function syncZajemCount() {
+  const n = zajemList().length;
+  $("#zajemCount").textContent = n ? `(${n})` : "";
+}
 const scoreCache = new Map();
 function recScore(r) {
   if (!r.gp) return null;
@@ -143,6 +176,8 @@ function rebuildOldGps() {
 
 /* ================= SLOUPCE ================= */
 const COLUMNS = [
+  { key: "akce",    label: "☎",           on: 1, get: (r) => (recEdit(r).zajem ? 1 : 0),
+    fmt: (v, r) => `<button class="callbtn${v ? " in" : ""}" data-id="${r.id}" title="${v ? "V Zájmu — kliknutím odebrat" : "Přidat do Zájmu k navolání"}">${v ? "✓" : "☎"}</button>` },
   { key: "score",   label: "Score",       on: 1, get: (r) => { const s = recScore(r); return s ? Math.round(s.score) : null; },
     fmt: (v) => v == null ? "" : `<span class="score-badge" style="background:${scoreColor(v)}">${v}</span>` },
   { key: "nazev",   label: "Název",       on: 1, get: (r) => recEdit(r).nazev ?? r.nazev },
@@ -173,6 +208,7 @@ const COLUMNS = [
 ];
 let visibleCols = loadJSON("drm_cols_v1", null) || COLUMNS.filter((c) => c.on).map((c) => c.key);
 if (!visibleCols.includes("ordoba")) visibleCols = [...visibleCols, "email", "ordoba"].filter((v, i, a) => a.indexOf(v) === i); // migrace: nové sloupce
+if (!visibleCols.includes("akce")) visibleCols = ["akce", ...visibleCols]; // migrace: tlačítko ☎
 function scoreColor(v) { return v >= 70 ? "#c0392b" : v >= 50 ? "#d97e12" : v >= 30 ? "#2a9d8f" : "#8a949e"; }
 
 /* ================= FILTRY ================= */
@@ -242,7 +278,7 @@ function renderRows() {
   tbody.innerHTML = filtered.slice(start, end).map((r, i) =>
     `<tr data-i="${start + i}">` + cols.map((c) => {
       const v = c.get(r);
-      return `<td>${c.fmt ? c.fmt(v) : esc(v ?? "")}</td>`;
+      return `<td>${c.fmt ? c.fmt(v, r) : esc(v ?? "")}</td>`;
     }).join("") + "</tr>").join("");
   tbody.style.transform = `translateY(${start * ROW_H}px)`;
   $("#gridSpacer").style.height = filtered.length * ROW_H + 60 + "px";
@@ -363,8 +399,6 @@ window.openDetail = function (id) {
   if (r.ico) rows.push(["Rejstříky", `<a href="https://ares.gov.cz/ekonomicke-subjekty?ico=${r.ico}" target="_blank">ARES →</a> · <a href="https://or.justice.cz/ias/ui/rejstrik-$firma?ico=${r.ico}&jenPlatne=PLATNE&polozek=50&typHledani=STARTS_WITH" target="_blank">justice.cz →</a>`]);
   rows.push(["ČLK", `<a href="https://www.lkcr.cz/seznam-lekaru" target="_blank">ověřit v seznamu lékařů →</a>`]);
 
-  const STAVY = ["", "Nekontaktováno", "Nedovoláno", "Dovoláno – nechce", "Dovoláno – zájem",
-                 "Osloveno", "Jedná se", "Due diligence", "Koupeno", "Nezájem", "Nerelevantní"];
   const chainOpts = ['<option value="">— bez řetězce —</option>']
     .concat((DATA.chains || []).map((c) => `<option value="${esc(c.id)}" ${ch === c.id ? "selected" : ""}>${esc(c.name)} (${c.count})</option>`))
     .join("");
@@ -384,7 +418,12 @@ window.openDetail = function (id) {
      <div class="editrow"><input id="eOrdoba" placeholder="ordinační doba (např. Po 8–12, St 13–18…)" value="${esc(e.ordoba ?? "")}" style="flex:1"></div>
      <div class="editrow"><select id="eChain" style="flex:1">${chainOpts}</select></div>
      <textarea id="ePozn" placeholder="poznámka…">${esc(e.pozn || "")}</textarea>
-     <div class="editrow"><button class="chip" id="eSave">💾 uložit</button><span class="muted small" id="eMsg"></span></div>`;
+     <div class="editrow">
+       <button class="chip" id="eSave">💾 uložit</button>
+       <button class="chip${e.zajem ? " on" : ""}" id="dZajem">${e.zajem ? "✓ v Zájmu (odebrat)" : "☎ přidat do Zájmu"}</button>
+       <span class="muted small" id="eMsg"></span>
+     </div>`;
+  $("#dZajem").onclick = () => { toggleZajem(r.id); openDetail(r.id); };
   $("#eSave").onclick = () => {
     const old = EDITS[r.id] || {};
     const ed = {};
@@ -414,6 +453,56 @@ window.openDetail = function (id) {
   };
   $("#drawer").classList.remove("hidden");
 };
+
+/* ================= ZÁJEM (call list) ================= */
+function renderZajem() {
+  if ($("#tab-zajem").classList.contains("hidden")) return;
+  const list = zajemList().sort((a, b) => (recEdit(b).zajemT || "").localeCompare(recEdit(a).zajemT || ""));
+  const st = (r) => recEdit(r).stav || "";
+  const waiting = list.filter((r) => !st(r) || st(r) === "Nekontaktováno" || st(r) === "Nedovoláno").length;
+  const zajemPoz = list.filter((r) => st(r) === "Dovoláno – zájem").length;
+  const nechce = list.filter((r) => st(r) === "Dovoláno – nechce").length;
+  $("#zjStats").innerHTML = `
+    <div class="act-card"><b>${list.length}</b>v seznamu</div>
+    <div class="act-card"><b>${waiting}</b>čeká na dovolání</div>
+    <div class="act-card"><b>${zajemPoz}</b>dovoláno – zájem</div>
+    <div class="act-card"><b>${nechce}</b>dovoláno – nechce</div>`;
+  $("#zajemGrid thead").innerHTML =
+    "<tr><th></th><th>Název</th><th>Lékař</th><th>Obec</th><th>Telefon</th><th>Věk</th><th>Stav</th><th>Poznámka</th><th>Přidáno</th><th></th></tr>";
+  $("#zajemGrid tbody").innerHTML = list.map((r) => {
+    const e = recEdit(r);
+    const v = recVek(r);
+    const stavNow = e.stav || "";
+    return `<tr>
+      <td><button class="chip zj-quick" data-id="${r.id}" data-stav="Nedovoláno" title="rychle: nedovoláno">✗</button>
+          <button class="chip zj-quick" data-id="${r.id}" data-stav="Dovoláno – zájem" title="rychle: dovoláno, má zájem">👍</button>
+          <button class="chip zj-quick" data-id="${r.id}" data-stav="Dovoláno – nechce" title="rychle: dovoláno, nechce">👎</button></td>
+      <td><a href="#" onclick="openDetail('${r.id}');return false;"><b>${esc(e.nazev ?? r.nazev)}</b></a></td>
+      <td>${esc(r.doctor || r.oz || "")}</td>
+      <td>${esc(r.obec)}</td>
+      <td>${esc(e.tel ?? r.tel ?? "")}</td>
+      <td>${v != null ? `<span class="${v >= 63 ? "age-red" : ""}">${v}</span>` : "?"}</td>
+      <td><select class="zj-stav" data-id="${r.id}">${STAVY.map((o) => `<option ${o === stavNow ? "selected" : ""}>${o}</option>`).join("")}</select></td>
+      <td><input class="zj-pozn" data-id="${r.id}" value="${esc(e.pozn || "")}" placeholder="poznámka…"></td>
+      <td class="muted small">${esc(e.zajemT || "")}</td>
+      <td><button class="chip danger zj-rm" data-id="${r.id}" title="odebrat ze seznamu">✕</button></td>
+    </tr>`;
+  }).join("") || "";
+  if (!list.length) $("#zajemGrid tbody").innerHTML = '<tr><td colspan="10" class="muted">Seznam je prázdný — přidej praktiky tlačítkem ☎ v tabulce.</td></tr>';
+  $$("#zajemGrid .zj-stav").forEach((s) => s.onchange = () => {
+    setEditField(s.dataset.id, "stav", s.value || null);
+    invalidateScores(); renderZajem(); renderActivity(); renderRows();
+  });
+  $$("#zajemGrid .zj-quick").forEach((b) => b.onclick = () => {
+    setEditField(b.dataset.id, "stav", b.dataset.stav);
+    renderZajem(); renderActivity(); renderRows();
+  });
+  $$("#zajemGrid .zj-pozn").forEach((inp) => inp.onchange = () => {
+    setEditField(inp.dataset.id, "pozn", inp.value.trim() || null);
+    renderActivity();
+  });
+  $$("#zajemGrid .zj-rm").forEach((b) => b.onclick = () => toggleZajem(b.dataset.id));
+}
 
 /* ================= MĚSTA ================= */
 let citySort = { key: "score", dir: -1 };
@@ -577,6 +666,7 @@ function initApp() {
   GP_KMEN_SORTED = DATA.records.filter((r) => r.kmen != null).map((r) => r.kmen).sort((a, b) => a - b);
   (DATA.chains || []).forEach((c) => CHAINS_BY_ID[c.id] = c);
   rebuildOldGps();
+  syncZajemCount();
 
   $("#metaInfo").textContent = `· ${DATA.meta.counts.records.toLocaleString("cs")} zařízení · ${DATA.meta.counts.gp.toLocaleString("cs")} praktiků · data ${DATA.meta.builtAt}`;
 
@@ -667,6 +757,8 @@ function initApp() {
     sortFiltered(); renderTable();
   });
   $("#grid tbody").addEventListener("click", (e) => {
+    const btn = e.target.closest(".callbtn");
+    if (btn) { toggleZajem(btn.dataset.id); return; }
     const tr = e.target.closest("tr"); if (!tr) return;
     openDetail(filtered[+tr.dataset.i].id);
   });
@@ -680,6 +772,7 @@ function initApp() {
     $("#tab-" + b.dataset.tab).classList.remove("hidden");
     if (b.dataset.tab === "map") { if (!map) initMap(); renderMap(); syncNearCircle(); setTimeout(() => map.invalidateSize(), 60); }
     if (b.dataset.tab === "score") renderScoreTab();
+    if (b.dataset.tab === "zajem") renderZajem();
     if (b.dataset.tab === "cities") renderCities();
     if (b.dataset.tab === "chains") renderChains();
     if (b.dataset.tab === "activity") renderActivity();
@@ -744,7 +837,7 @@ function initApp() {
   $("#logout").onclick = () => { sessionStorage.removeItem("drm_pw"); localStorage.removeItem("drm_pw"); location.reload(); };
 
   $("#exportCsv").onclick = () => {
-    const cols = COLUMNS.filter((c) => visibleCols.includes(c.key));
+    const cols = COLUMNS.filter((c) => visibleCols.includes(c.key) && c.key !== "akce");
     const lines = [cols.map((c) => c.label).join(";")];
     for (const r of filtered) lines.push(cols.map((c) => String(c.get(r) ?? "").replace(/;/g, ",").replace(/\n/g, " ")).join(";"));
     download("doctorrm-export.csv", "﻿" + lines.join("\n"));
